@@ -3241,9 +3241,10 @@ describe('ChatList (FlashList v2)', () => {
                 transcriptViewportTelemetryMaxEvents: 128,
             };
             let activeSessionId = 'session-a';
-            const onViewportChange = vi.fn((state: any) => {
-                routeSessionViewportChangeIntoTestStore(activeSessionId, state);
+            const createViewportChangeHandler = (sessionId: string) => vi.fn((state: any) => {
+                routeSessionViewportChangeIntoTestStore(sessionId, state);
             });
+            const onViewportChange = createViewportChangeHandler('session-a');
             const messagesForSession = (sessionId: string) => [
                 { kind: 'user-text', id: `${sessionId}-u1`, localId: null, createdAt: 1, seq: 1, text: `${sessionId} user` },
                 { kind: 'agent-text', id: `${sessionId}-a1`, localId: null, createdAt: 2, seq: 2, text: `${sessionId} agent` },
@@ -3279,8 +3280,9 @@ describe('ChatList (FlashList v2)', () => {
                     source: index % 3 === 0 ? 'default' : 'observed',
                 });
                 sessionMessagesState = { isLoaded: true, messages: messagesForSession(activeSessionId) };
+                const interveningViewportChange = createViewportChangeHandler(activeSessionId);
                 const interveningScreen = await renderTrackedFlashListChatList(
-                    <ChatList session={{ ...sessionState, id: activeSessionId }} onViewportChange={onViewportChange} />,
+                    <ChatList session={{ ...sessionState, id: activeSessionId }} onViewportChange={interveningViewportChange} />,
                 );
                 await primeFlashListMetrics(100, 1000, { turns: 2 });
                 await settleNativeFlashListMount(interveningScreen);
@@ -12938,6 +12940,7 @@ describe('ChatList (FlashList v2)', () => {
                 <ChatList session={{ ...sessionState }} onViewportChange={onViewportChange} />,
             );
             await primeFlashListMetrics(667, 35736, { turns: 2 });
+            await settleNativeFlashListMount(screen);
 
             // Entry restore issued its one-shot distance write; transaction is still open.
             expect(scrollToOffset).toHaveBeenCalledWith({ offset: 657, animated: false });

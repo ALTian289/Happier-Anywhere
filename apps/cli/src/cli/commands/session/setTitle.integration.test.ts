@@ -191,6 +191,17 @@ describe('happier session set-title (integration)', () => {
   it('returns approval_request_created when the CLI surface requires approval', async () => {
     requireApprovalForCliSurface = true;
     allowMetadataUpdate = false;
+    process.env.HAPPIER_ACTIONS_SETTINGS_V1 = JSON.stringify({
+      v: 1,
+      actions: {
+        'session.title.set': {
+          enabled: true,
+          disabledSurfaces: [],
+          disabledPlacements: [],
+          approvalRequiredSurfaces: ['cli'],
+        },
+      },
+    });
 
     const { handleSessionCommand } = await import('./index');
 

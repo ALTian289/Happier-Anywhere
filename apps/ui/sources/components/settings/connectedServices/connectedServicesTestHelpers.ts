@@ -56,6 +56,8 @@ export function resetConnectedServicesCommonModuleMockState() {
  * - `Icon`: keeps the shared icon seam as an inspectable host element.
  * - `react-native-gesture-handler`: AccountBlockView mounts GestureDetector;
  *   loading the native package in Node reaches Flow-only React Native syntax.
+ * - `@react-navigation/native`: PoolsList imports the native navigation package,
+ *   whose Flow source is not parseable by the Node test runtime.
  *
  * Call this AT MODULE SCOPE (alongside `installConnectedServicesCommonModuleMocks`).
  */
@@ -99,6 +101,11 @@ export function installConnectedServiceDetailShellMocks() {
     vi.mock('react-native-gesture-handler', async () => {
         const { createGestureHandlerMock } = await import('@/dev/testkit/mocks/gestureHandler');
         return createGestureHandlerMock();
+    });
+
+    vi.mock('@react-navigation/native', async () => {
+        const { createReactNavigationNativeMock } = await import('@/dev/testkit/mocks/reactNavigation');
+        return createReactNavigationNativeMock();
     });
 
     vi.mock('@/components/ui/avatar/Avatar', () => {

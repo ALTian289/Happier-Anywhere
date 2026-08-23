@@ -472,7 +472,7 @@ jobs:
 
       - name: Run unit tests
         env:
-          HAPPIER_UI_VITEST_SHARDS: "48"
+          HAPPIER_UI_VITEST_SHARDS: "96"
           HAPPIER_UI_VITEST_OUTER_SHARD: "${{ matrix.shard }}/4"
         run: yarn workspace @happier-dev/app test:unit
 

@@ -135,6 +135,26 @@ describe('session open latch', () => {
         ]);
     });
 
+    it('requests bounded initial fill when a loaded page projects to zero visible items', () => {
+        const latch = createSessionOpenLatch();
+
+        latch.arm(armInput());
+        const decision = latch.onHostFacts({
+            contentHeight: 240,
+            hasEntrySliceWindow: false,
+            isLoaded: true,
+            isScrollable: false,
+            itemCount: 0,
+            layoutHeight: 600,
+            nowMs: 1_025,
+            sessionId: 'session-a',
+            userWantsPinned: true,
+        });
+
+        expect(decision.phase).toBe('positioning');
+        expect(decision.effects).toContainEqual({ type: 'request-initial-fill' });
+    });
+
     it('keeps renderer-owned web bottom entries free of app initial pin and retry writes', () => {
         const latch = createSessionOpenLatch();
         const rendererOwnedArm = {

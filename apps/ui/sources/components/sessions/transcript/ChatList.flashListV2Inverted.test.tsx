@@ -1712,9 +1712,13 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
             const initialWindowMessages = messagesForSeqRange(1, 3, 'target window');
             const firstNewerPage = messagesForSeqRange(4, 2, 'newer window');
             const finalNewerPage = messagesForSeqRange(6, 2, 'newer window');
+            activateWindowState('session-1', 1, initialWindowMessages, {
+                hasMoreOlder: false,
+                hasMoreNewer: true,
+            });
             flashListChatListHarnessState.sessionMessagesState = {
                 isLoaded: true,
-                messages: messagesForSeqRange(50, 10, 'tail'),
+                messages: initialWindowMessages,
             };
             flashListChatListHarnessState.sessionState = {
                 ...flashListChatListHarnessState.sessionState,
@@ -1728,16 +1732,12 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
             ) => {
                 expect(sessionId).toBe('session-1');
                 expect(target).toEqual({ kind: 'seq', seq: 1 });
-                const direction = options.direction ?? 'initial';
-                if (direction === 'newer') newerPageCount += 1;
-                const nextMessages = direction === 'newer' && newerPageCount === 1
+                expect(options.direction).toBe('newer');
+                newerPageCount += 1;
+                const nextMessages = newerPageCount === 1
                     ? [...initialWindowMessages, ...firstNewerPage]
-                    : direction === 'newer'
-                        ? [...initialWindowMessages, ...firstNewerPage, ...finalNewerPage]
-                        : initialWindowMessages;
-                const hasMoreNewer = direction === 'newer'
-                    ? newerPageCount < 2
-                    : true;
+                    : [...initialWindowMessages, ...firstNewerPage, ...finalNewerPage];
+                const hasMoreNewer = newerPageCount < 2;
                 activateWindowState(sessionId, target.seq, nextMessages, {
                     hasMoreOlder: false,
                     hasMoreNewer,
@@ -1771,6 +1771,7 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
             });
             await settleNativeMount(screen);
 
+            expect(targetWindowMockState.loadTargetWindowMessages).not.toHaveBeenCalled();
             expect(listDataIds(screen)).toEqual([
                 'transcript-window-gap:target:session-1:1:newer',
                 'm3', 'm2', 'm1',
@@ -1787,12 +1788,13 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
                 screen.tree.update(
                     <ChatList
                         session={{ ...flashListChatListHarnessState.sessionState }}
+                        jumpToSeq={1}
                         onEditPendingMessage={vi.fn()}
                     />,
                 );
             });
             await screen.settle({ cycles: 1, turns: 2 });
-            expect(targetWindowMockState.loadTargetWindowMessages).toHaveBeenCalledTimes(2);
+            expect(targetWindowMockState.loadTargetWindowMessages).toHaveBeenCalledTimes(1);
             expect(targetWindowMockState.loadTargetWindowMessages).toHaveBeenCalledWith(
                 'session-1',
                 { kind: 'seq', seq: 1 },
@@ -1813,12 +1815,13 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
                 screen.tree.update(
                     <ChatList
                         session={{ ...flashListChatListHarnessState.sessionState }}
+                        jumpToSeq={1}
                         onEditPendingMessage={vi.fn()}
                     />,
                 );
             });
             await screen.settle({ cycles: 1, turns: 2 });
-            expect(targetWindowMockState.loadTargetWindowMessages).toHaveBeenCalledTimes(3);
+            expect(targetWindowMockState.loadTargetWindowMessages).toHaveBeenCalledTimes(2);
             expect(listDataIds(screen)).toEqual(['m7', 'm6', 'm5', 'm4', 'm3', 'm2', 'm1']);
 
             await act(async () => {
@@ -1873,7 +1876,7 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
             const { ChatList } = await import('./ChatList');
             const forceRerenderEditPendingMessage = vi.fn();
             const screen = await renderFlashListChatList(
-                <ChatList session={flashListChatListHarnessState.sessionState} />,
+                <ChatList session={flashListChatListHarnessState.sessionState} jumpToSeq={10} />,
             );
             await screen.triggerInitialFill({
                 layoutHeight: 500,
@@ -1881,6 +1884,7 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
                 flushOptions: { cycles: 1, turns: 2 },
             });
             await settleNativeMount(screen);
+            expect(targetWindowMockState.loadTargetWindowMessages).not.toHaveBeenCalled();
 
             await act(async () => {
                 screen.requireCapturedFlashListProps().onEndReached?.();
@@ -1890,6 +1894,7 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
                 screen.tree.update(
                     <ChatList
                         session={{ ...flashListChatListHarnessState.sessionState }}
+                        jumpToSeq={10}
                         onEditPendingMessage={forceRerenderEditPendingMessage}
                     />,
                 );

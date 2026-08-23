@@ -176,11 +176,15 @@ async function runLegacySubscriberScenario(params: Readonly<{
   const { session, observations, switchHandlerReady } = createHarness();
   const queryStarted = createDeferred<void>();
   const terminalHookConsumed = createDeferred<void>();
+  const releaseProvider = createDeferred<void>();
   let providerInputConsumed = false;
 
   mockQuery.mockImplementationOnce((config: QueryConfig) => {
     queryStarted.resolve(undefined);
     return {
+      interrupt: vi.fn(async () => {
+        releaseProvider.resolve(undefined);
+      }),
       async *[Symbol.asyncIterator]() {
         // This exact launch is emitted synchronously with the provider's first
         // prompt read. Missing/late launcher subscription would lose it.
@@ -216,7 +220,12 @@ async function runLegacySubscriberScenario(params: Readonly<{
         });
         terminalHookConsumed.resolve(undefined);
 
-        yield emitStreamRow(config, { type: 'result' } as SDKMessage);
+        // Keep the provider alive until the switch exercises the same interrupt
+        // contract exposed by a real Agent SDK query. The previous fixture ended
+        // the turn with a synthetic result and could race into the launcher's
+        // next-input wait before teardown, leaving the test suspended for the
+        // full integration timeout.
+        await releaseProvider.promise;
       },
     };
   });

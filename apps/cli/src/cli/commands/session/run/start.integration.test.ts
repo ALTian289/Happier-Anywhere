@@ -394,7 +394,18 @@ describe('happier session run start (integration)', () => {
     try {
       const machineKeySeed = new Uint8Array(32).fill(8);
       await handleSessionCommand(
-        ['run', 'start', 'sess_integration_run_start_123', '--intent', 'delegate', '--backend', 'acpBackend:review-bot', '--json'],
+        [
+          'run',
+          'start',
+          'sess_integration_run_start_123',
+          '--intent',
+          'delegate',
+          '--backend',
+          'acpBackend:review-bot',
+          '--permission-mode',
+          'read_only',
+          '--json',
+        ],
         {
           readCredentialsFn: async () => ({
             token: 'token_test',

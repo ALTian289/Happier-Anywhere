@@ -49,8 +49,8 @@ describe('happier session send plaintext sessions (integration)', () => {
               seq: 1,
               createdAt: 1,
               updatedAt: 2,
-              active: false,
-              activeAt: 0,
+              active: true,
+              activeAt: 2,
               metadata: metadataPlain,
               metadataVersion: 0,
               agentState: JSON.stringify({ controlledByUser: false, requests: {} }),
@@ -63,6 +63,19 @@ describe('happier session send plaintext sessions (integration)', () => {
             },
           }),
         );
+        return;
+      }
+
+      if (req.method === 'POST' && url.pathname === `/v2/sessions/${sessionId}/pending`) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { content?: any };
+        receivedMessages.push(body.content);
+        res.statusCode = 200;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ didWrite: true, terminal: false, suppressed: false }));
         return;
       }
 
@@ -114,7 +127,7 @@ describe('happier session send plaintext sessions (integration)', () => {
     reloadConfiguration();
   });
 
-  it('emits a plaintext message envelope over the socket and includes meta defaults from plaintext metadata', async () => {
+  it('enqueues a plaintext message envelope and includes meta defaults from plaintext metadata', async () => {
     const { handleSessionCommand } = await import('./index');
 
     const output = captureConsoleJsonOutput();

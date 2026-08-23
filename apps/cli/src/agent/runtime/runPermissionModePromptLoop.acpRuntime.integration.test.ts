@@ -261,13 +261,15 @@ describe('runPermissionModePromptLoop with real ACP runtime idle overrides', () 
       sendReady: () => {
         readyCount += 1;
         if (readyCount !== 1) return;
-        serverMetadata = {
-          ...metadata,
-          acpSessionModeOverrideV1: { v: 1, updatedAt: 10, modeId: 'plan' },
-        };
-        const wake = resolveMetadataWake;
-        resolveMetadataWake = null;
-        wake?.(true);
+        setTimeout(() => {
+          serverMetadata = {
+            ...metadata,
+            acpSessionModeOverrideV1: { v: 1, updatedAt: 10, modeId: 'plan' },
+          };
+          const wake = resolveMetadataWake;
+          resolveMetadataWake = null;
+          wake?.(true);
+        }, 0);
       },
       currentPermissionModeUpdatedAt: 0,
       setCurrentPermissionMode: () => {},

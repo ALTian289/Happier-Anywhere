@@ -245,12 +245,15 @@ async function closeUndiciGlobalDispatcherForTests(): Promise<void> {
             destroy?: () => Promise<void> | void;
         } | null;
         if (!dispatcher) return;
-        if (typeof dispatcher.close === 'function') {
-            await dispatcher.close();
-            return;
-        }
+        // This is process teardown: graceful close can wait forever for a leaked
+        // keep-alive request. Destroying the test-only dispatcher releases those
+        // handles deterministically after every suite has already completed.
         if (typeof dispatcher.destroy === 'function') {
             await dispatcher.destroy();
+            return;
+        }
+        if (typeof dispatcher.close === 'function') {
+            await dispatcher.close();
         }
     } catch {
         // ignore (undici may not be available in some runtimes)

@@ -215,7 +215,11 @@ export function createSessionOpenLatch(): SessionOpenLatch {
                 phase = 'done';
                 return decision();
             }
-            if (!facts.isLoaded || facts.itemCount <= 0) {
+            // A loaded page can legitimately project to zero main-lane items (for
+            // example, a sidechain-only latest page). That is still loaded data and
+            // must proceed to the bounded older-page fill; otherwise the transcript
+            // can never become scrollable and no user-driven pagination can start.
+            if (!facts.isLoaded) {
                 phase = 'awaiting-data';
                 return decision();
             }

@@ -88,8 +88,8 @@ describe('happier session send (integration)', () => {
       encryptWithDataKey({ controlledByUser: false, requests: {} }, dek!),
       'base64',
     );
-    sessionActive = false;
-    sessionActiveAt = 0;
+    sessionActive = true;
+    sessionActiveAt = 2;
     sessionMetadataCiphertext = metadataCiphertext;
     sessionAgentStateCiphertext = busyAgentStateCiphertext;
     sessionDataEncryptionKeyBase64 = dataEncryptionKeyBase64;
@@ -129,6 +129,94 @@ describe('happier session send (integration)', () => {
             },
           }),
         );
+        return;
+      }
+
+      if (req.method === 'POST' && url.pathname === `/v2/sessions/${sessionId}/pending`) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+          localId?: unknown;
+          ciphertext?: unknown;
+          content?: any;
+        };
+        const localId = typeof body.localId === 'string' ? body.localId : null;
+        const content = typeof body.ciphertext === 'string'
+          ? { t: 'encrypted', c: body.ciphertext }
+          : body.content;
+
+        if (!localId || !content) {
+          res.statusCode = 400;
+          res.setHeader('content-type', 'application/json');
+          res.end(JSON.stringify({ error: 'invalid pending body' }));
+          return;
+        }
+
+        lastActiveSessionRpcLocalId = localId;
+        if (content.t === 'encrypted') {
+          const decrypted = decryptWithDataKeyFn!(
+            decodeBase64Fn!(String(content.c ?? ''), 'base64'),
+            dek!,
+          );
+          receivedMessages.push(decrypted);
+        } else if (content.t === 'plain') {
+          receivedMessages.push(content.v);
+        }
+
+        if (stageCommittedUserMessageInTranscript) {
+          transcriptMessages.push({
+            id: `m${transcriptMessages.length + 1}`,
+            seq: transcriptMessages.length + 1,
+            localId,
+            createdAt: Date.now(),
+            content,
+          });
+          if (stageAssistantReplyAfterCommittedUser) {
+            transcriptMessages.push({
+              id: `m${transcriptMessages.length + 1}`,
+              seq: transcriptMessages.length + 1,
+              localId: null,
+              createdAt: Date.now(),
+              content: {
+                t: 'plain',
+                v: {
+                  role: 'agent',
+                  content: { type: 'text', text: 'assistant completion' },
+                },
+              },
+            });
+          }
+        }
+
+        if (typeof stageVisibleMessageByLocalIdDelayMs === 'number') {
+          const createdAt = Date.now();
+          setTimeout(() => {
+            visibleMessageByLocalId = {
+              id: `lookup-${localId}`,
+              localId,
+              seq: 1,
+              createdAt,
+              updatedAt: createdAt,
+              content,
+            };
+          }, stageVisibleMessageByLocalIdDelayMs);
+        } else if (stageCommittedUserMessageInTranscript) {
+          const createdAt = Date.now();
+          visibleMessageByLocalId = {
+            id: `lookup-${localId}`,
+            localId,
+            seq: 1,
+            createdAt,
+            updatedAt: createdAt,
+            content,
+          };
+        }
+
+        res.statusCode = 200;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ didWrite: true, terminal: false, suppressed: false }));
         return;
       }
 
@@ -380,7 +468,7 @@ describe('happier session send (integration)', () => {
     }
   });
 
-  it('times out waiting for an inactive session user turn when no assistant output is observed', async () => {
+  it('times out waiting for the current user turn when no assistant output is observed', async () => {
     stageCommittedUserMessageInTranscript = true;
     stageVisibleMessageByLocalIdDelayMs = 50;
 
@@ -427,11 +515,12 @@ describe('happier session send (integration)', () => {
       emit: (event: string, args: unknown[]) => {
         const [data, cb] = args as [any, ((answer: any) => void) | undefined];
         if (event === SOCKET_RPC_EVENTS.CALL) {
+          expect(String(data.method ?? '')).toBe(`${sessionId}:${SESSION_RPC_METHODS.SESSION_PENDING_QUEUE_WAKE_V1}`);
           const decrypted = decryptWithDataKey(
             decodeBase64(String(data.params ?? ''), 'base64'),
             dek!,
           ) as any;
-          lastActiveSessionRpcLocalId = typeof decrypted?.localId === 'string' ? decrypted.localId : null;
+          expect(decrypted).toEqual({ protocolVersion: 1 });
           cb?.({ ok: true, result: encodeBase64Session(encryptWithDataKey({ ok: true }, dek!), 'base64') });
           return;
         }
@@ -501,7 +590,7 @@ describe('happier session send (integration)', () => {
     }
   });
 
-  it('uses session RPC for active sessions so running agents receive the prompt through their runtime queue', async () => {
+  it('durably enqueues active-session prompts and nudges the running agent through RPC', async () => {
     const { handleSessionCommand } = await import('./index');
     const { encodeBase64: encodeBase64Session, encryptWithDataKey, decodeBase64, decryptWithDataKey } = await import('@/api/encryption');
 
@@ -538,20 +627,12 @@ describe('happier session send (integration)', () => {
       emit: (event: string, args: unknown[]) => {
         const [data, cb] = args as [any, ((answer: any) => void) | undefined];
         if (event === SOCKET_RPC_EVENTS.CALL) {
-          expect(String(data.method ?? '')).toBe(`${sessionId}:${SESSION_RPC_METHODS.SESSION_USER_MESSAGE_SEND}`);
+          expect(String(data.method ?? '')).toBe(`${sessionId}:${SESSION_RPC_METHODS.SESSION_PENDING_QUEUE_WAKE_V1}`);
           const decrypted = decryptWithDataKey(
             decodeBase64(String(data.params ?? ''), 'base64'),
             dek!,
           ) as any;
-          expect(decrypted).toMatchObject({
-            text: 'Hello active session',
-            meta: expect.objectContaining({
-              sentFrom: 'cli',
-              source: 'ui',
-              permissionMode: 'safe-yolo',
-              model: 'claude-sonnet-4-0',
-            }),
-          });
+          expect(decrypted).toEqual({ protocolVersion: 1 });
           cb?.({ ok: true, result: encodeBase64Session(encryptWithDataKey({ ok: true }, dek!), 'base64') });
           return;
         }
@@ -578,7 +659,17 @@ describe('happier session send (integration)', () => {
       expect(parsed.ok, JSON.stringify(parsed)).toBe(true);
       expect(parsed.kind).toBe('session_send');
       expect(parsed.data?.sessionId).toBe(sessionId);
-      expect(receivedMessages).toHaveLength(0);
+      expect(receivedMessages).toHaveLength(1);
+      expect(receivedMessages[0]).toMatchObject({
+        role: 'user',
+        content: { type: 'text', text: 'Hello active session' },
+        meta: {
+          sentFrom: 'cli',
+          source: 'ui',
+          permissionMode: 'safe-yolo',
+          model: 'claude-sonnet-4-0',
+        },
+      });
     } finally {
       output.restore();
     }
@@ -603,12 +694,12 @@ describe('happier session send (integration)', () => {
       emit: (event: string, args: unknown[]) => {
         const [data, cb] = args as [any, ((answer: any) => void) | undefined];
         if (event === SOCKET_RPC_EVENTS.CALL) {
-          expect(String(data.method ?? '')).toBe(`${sessionId}:${SESSION_RPC_METHODS.SESSION_USER_MESSAGE_SEND}`);
+          expect(String(data.method ?? '')).toBe(`${sessionId}:${SESSION_RPC_METHODS.SESSION_PENDING_QUEUE_WAKE_V1}`);
           const decrypted = decryptWithDataKey(
             decodeBase64(String(data.params ?? ''), 'base64'),
             dek!,
           ) as any;
-          lastActiveSessionRpcLocalId = typeof decrypted?.localId === 'string' ? decrypted.localId : null;
+          expect(decrypted).toEqual({ protocolVersion: 1 });
           cb?.({ ok: true, result: encodeBase64Session(encryptWithDataKey({ ok: true }, dek!), 'base64') });
           return;
         }
@@ -785,12 +876,12 @@ describe('happier session send (integration)', () => {
       emit: (event: string, args: unknown[]) => {
         const [data, cb] = args as [any, ((answer: any) => void) | undefined];
         if (event === SOCKET_RPC_EVENTS.CALL) {
-          expect(String(data.method ?? '')).toBe(`${sessionId}:${SESSION_RPC_METHODS.SESSION_USER_MESSAGE_SEND}`);
+          expect(String(data.method ?? '')).toBe(`${sessionId}:${SESSION_RPC_METHODS.SESSION_PENDING_QUEUE_WAKE_V1}`);
           const decrypted = decryptWithDataKey(
             decodeBase64(String(data.params ?? ''), 'base64'),
             dek!,
           ) as any;
-          lastActiveSessionRpcLocalId = typeof decrypted?.localId === 'string' ? decrypted.localId : null;
+          expect(decrypted).toEqual({ protocolVersion: 1 });
           cb?.({ ok: true, result: encodeBase64Session(encryptWithDataKey({ ok: true }, dek!), 'base64') });
           return;
         }
@@ -948,12 +1039,12 @@ describe('happier session send (integration)', () => {
       emit: (event: string, args: unknown[]) => {
         const [data, cb] = args as [any, ((answer: any) => void) | undefined];
         if (event === SOCKET_RPC_EVENTS.CALL) {
-          expect(String(data.method ?? '')).toBe(`${sessionId}:${SESSION_RPC_METHODS.SESSION_USER_MESSAGE_SEND}`);
+          expect(String(data.method ?? '')).toBe(`${sessionId}:${SESSION_RPC_METHODS.SESSION_PENDING_QUEUE_WAKE_V1}`);
           const decrypted = decryptWithDataKey(
             decodeBase64(String(data.params ?? ''), 'base64'),
             dek!,
           ) as any;
-          lastActiveSessionRpcLocalId = typeof decrypted?.localId === 'string' ? decrypted.localId : null;
+          expect(decrypted).toEqual({ protocolVersion: 1 });
           cb?.({ ok: true, result: encodeBase64Session(encryptWithDataKey({ ok: true }, dek!), 'base64') });
           return;
         }
@@ -1099,12 +1190,12 @@ describe('happier session send (integration)', () => {
       emit: (event: string, args: unknown[]) => {
         const [data, cb] = args as [any, ((answer: any) => void) | undefined];
         if (event === SOCKET_RPC_EVENTS.CALL) {
-          expect(String(data.method ?? '')).toBe(`${sessionId}:${SESSION_RPC_METHODS.SESSION_USER_MESSAGE_SEND}`);
+          expect(String(data.method ?? '')).toBe(`${sessionId}:${SESSION_RPC_METHODS.SESSION_PENDING_QUEUE_WAKE_V1}`);
           const decrypted = decryptWithDataKey(
             decodeBase64(String(data.params ?? ''), 'base64'),
             dek!,
           ) as any;
-          lastActiveSessionRpcLocalId = typeof decrypted?.localId === 'string' ? decrypted.localId : null;
+          expect(decrypted).toEqual({ protocolVersion: 1 });
           cb?.({ ok: true, result: encodeBase64Session(encryptWithDataKey({ ok: true }, dek!), 'base64') });
           return;
         }
@@ -1248,7 +1339,7 @@ describe('happier session send (integration)', () => {
     }
   });
 
-  it('falls back to committed socket send when active-session RPC cannot connect', async () => {
+  it('keeps the durable Pending send successful when the active-session wake cannot connect', async () => {
     const { handleSessionCommand } = await import('./index');
 
     const sessionId = 'sess_integration_send_123';
@@ -1261,25 +1352,7 @@ describe('happier session send (integration)', () => {
       rpcSocket.trigger('connect_error', new Error('connect_error'));
       return rpcSocket;
     });
-    const committedSocket = createApiSessionSocketStub({
-      emit: (event: string, args: unknown[]) => {
-        const [payload, ack] = args as [any, ((answer: any) => void) | undefined];
-        if (event !== 'message') {
-          throw new Error(`Unexpected socket event: ${event}`);
-        }
-        expect(payload).toEqual(expect.objectContaining({ messageRole: 'user' }));
-        const content = payload?.message;
-        if (content?.t === 'encrypted') {
-          const decrypted = decryptWithDataKeyFn!(
-            decodeBase64Fn!(String(content?.c ?? ''), 'base64'),
-            dek!,
-          );
-          receivedMessages.push(decrypted);
-        }
-        ack?.({ ok: true, id: 'm1', seq: 2, localId: payload?.localId ?? null, didWrite: true });
-      },
-    });
-    bindApiSessionSocketSequenceMock(mockIo, [rpcSocket, committedSocket]);
+    bindApiSessionSocketMock(mockIo, rpcSocket);
 
     const output = captureConsoleJsonOutput();
 
@@ -1307,7 +1380,7 @@ describe('happier session send (integration)', () => {
     }
   });
 
-  it('falls back to committed socket send when active-session RPC reports session_not_found', async () => {
+  it('keeps the durable Pending send successful when the active-session wake reports session_not_found', async () => {
     const { handleSessionCommand } = await import('./index');
 
     const sessionId = 'sess_integration_send_123';
@@ -1324,24 +1397,7 @@ describe('happier session send (integration)', () => {
         ack?.({ ok: false, error: 'session_not_found', errorCode: 'session_not_found' });
       },
     });
-    const committedSocket = createApiSessionSocketStub({
-      emit: (event: string, args: unknown[]) => {
-        const [payload, ack] = args as [any, ((answer: any) => void) | undefined];
-        if (event !== 'message') {
-          throw new Error(`Unexpected socket event: ${event}`);
-        }
-        const content = payload?.message;
-        if (content?.t === 'encrypted') {
-          const decrypted = decryptWithDataKeyFn!(
-            decodeBase64Fn!(String(content?.c ?? ''), 'base64'),
-            dek!,
-          );
-          receivedMessages.push(decrypted);
-        }
-        ack?.({ ok: true, id: 'm1', seq: 2, localId: payload?.localId ?? null, didWrite: true });
-      },
-    });
-    bindApiSessionSocketSequenceMock(mockIo, [rpcSocket, committedSocket]);
+    bindApiSessionSocketMock(mockIo, rpcSocket);
 
     const output = captureConsoleJsonOutput();
 
@@ -1369,7 +1425,7 @@ describe('happier session send (integration)', () => {
     }
   });
 
-  it('does not retry via committed socket send after an active-session RPC timeout', async () => {
+  it('does not duplicate the durable Pending send when the active-session wake times out', async () => {
     const { handleSessionCommand } = await import('./index');
 
     const sessionId = 'sess_integration_send_123';
@@ -1388,7 +1444,7 @@ describe('happier session send (integration)', () => {
 
     const output = captureConsoleJsonOutput();
     try {
-      await handleSessionCommand(['send', sessionId, 'Do not duplicate on timeout', '--json'], {
+      await handleSessionCommand(['send', sessionId, 'Do not duplicate on timeout', '--timeout', '1', '--json'], {
         readCredentialsFn: async () => ({
           token: 'token_test',
           encryption: {
@@ -1400,12 +1456,14 @@ describe('happier session send (integration)', () => {
       });
 
       const parsed = output.json();
-      expect(parsed.ok).toBe(false);
+      expect(parsed.ok).toBe(true);
       expect(parsed.kind).toBe('session_send');
-      expect(parsed.error?.code).toBe('timeout');
-      expect(parsed.error?.message).toContain('RPC call timeout');
       expect(mockIo).toHaveBeenCalledTimes(1);
-      expect(receivedMessages).toHaveLength(0);
+      expect(receivedMessages).toHaveLength(1);
+      expect(receivedMessages[0]).toMatchObject({
+        role: 'user',
+        content: { type: 'text', text: 'Do not duplicate on timeout' },
+      });
     } finally {
       output.restore();
     }
@@ -1413,6 +1471,22 @@ describe('happier session send (integration)', () => {
 
   it('supports --permission-mode and --model overrides for a single send', async () => {
     const { handleSessionCommand } = await import('./index');
+    const { encodeBase64: encodeBase64Session, encryptWithDataKey } = await import('@/api/encryption');
+
+    sessionMetadataCiphertext = encodeBase64Session(
+      encryptWithDataKey(
+        {
+          path: '/tmp',
+          tag: 'MyTag',
+          host: 'host1',
+          permissionMode: 'yolo',
+          permissionModeUpdatedAt: 12,
+          modelOverrideV1: { v: 1, updatedAt: 11, modelId: 'claude-sonnet-4-0' },
+        },
+        dek!,
+      ),
+      'base64',
+    );
 
     const output = captureConsoleJsonOutput();
 

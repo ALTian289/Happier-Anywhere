@@ -26,7 +26,19 @@ describe('happier session set-permission-mode (integration)', () => {
 
     const secret = new Uint8Array(32).fill(7);
     const { encodeBase64, encryptLegacy } = await import('@/api/encryption');
-    const metadataCiphertext = encodeBase64(encryptLegacy({ path: '/tmp', host: 'host1', tag: 'MyTag' }, secret), 'base64');
+    const metadataCiphertext = encodeBase64(
+      encryptLegacy(
+        {
+          path: '/tmp',
+          host: 'host1',
+          tag: 'MyTag',
+          permissionMode: 'safe-yolo',
+          permissionModeUpdatedAt: 1,
+        },
+        secret,
+      ),
+      'base64',
+    );
 
     server = createServer((req, res) => {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`);

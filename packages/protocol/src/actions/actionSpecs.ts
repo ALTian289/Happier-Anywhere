@@ -1510,7 +1510,7 @@ export const ACTION_SPECS: readonly ActionSpec[] = Object.freeze([
       ui_slash_command: false,
       voice_tool: true,
       voice_action_block: true,
-      session_agent: false,
+      session_agent: true,
       mcp: true,
       cli: true,
     },

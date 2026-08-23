@@ -77,6 +77,11 @@ vi.mock('react-native-gesture-handler', async () => {
     return createGestureHandlerMock();
 });
 
+vi.mock('@react-navigation/native', async () => {
+    const { createReactNavigationNativeMock } = await import('@/dev/testkit/mocks/reactNavigation');
+    return createReactNavigationNativeMock();
+});
+
 vi.mock('@/components/ui/avatar/Avatar', () => {
     const React = require('react');
     return { Avatar: (props: Record<string, unknown>) => React.createElement('Avatar', props) };

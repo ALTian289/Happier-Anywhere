@@ -46,7 +46,7 @@ test('tests workflow keeps slow CI jobs above the observed timeout floor', async
   assert.match(uiJob, /shard:\s*\[1, 2, 3, 4\]/, 'UI unit tests should fan out across four runner jobs');
   assert.match(
     uiJob,
-    /HAPPIER_UI_VITEST_SHARDS:\s*"48"[\s\S]*?HAPPIER_UI_VITEST_OUTER_SHARD:\s*"\$\{\{ matrix\.shard \}\}\/4"/,
+    /HAPPIER_UI_VITEST_SHARDS:\s*"96"[\s\S]*?HAPPIER_UI_VITEST_OUTER_SHARD:\s*"\$\{\{ matrix\.shard \}\}\/4"/,
     'each UI runner should execute only its quarter of the unit suite in child processes small enough to stay below the heap limit',
   );
 

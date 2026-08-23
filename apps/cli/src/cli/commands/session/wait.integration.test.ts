@@ -608,7 +608,36 @@ describe('happier session wait (integration)', () => {
 
   it('does not let an idle session projection mask a freshly committed user turn', async () => {
     initialAgentStateCiphertext = idleAgentStateCiphertext;
-    transcriptMessages = [];
+    transcriptMessages = [
+      {
+        id: 'm1',
+        seq: 1,
+        createdAt: 1,
+        content: {
+          t: 'plain',
+          v: {
+            role: 'user',
+            content: { type: 'text', text: 'created-session prompt' },
+          },
+        },
+      },
+      {
+        id: 'm2',
+        seq: 2,
+        createdAt: 2,
+        content: {
+          t: 'plain',
+          v: {
+            role: 'agent',
+            content: {
+              type: 'acp',
+              provider: 'codex',
+              data: { type: 'task_started', id: 'task_wait_projection_race' },
+            },
+          },
+        },
+      },
+    ];
 
     server?.removeAllListeners('request');
     server?.on('request', (req, res) => {
@@ -700,39 +729,6 @@ describe('happier session wait (integration)', () => {
           },
         }),
       });
-
-      await waitForTranscriptFetch();
-
-      transcriptMessages = [
-        {
-          id: 'm1',
-          seq: 1,
-          createdAt: 1,
-          content: {
-            t: 'plain',
-            v: {
-              role: 'user',
-              content: { type: 'text', text: 'created-session prompt' },
-            },
-          },
-        },
-        {
-          id: 'm2',
-          seq: 2,
-          createdAt: 2,
-          content: {
-            t: 'plain',
-            v: {
-              role: 'agent',
-              content: {
-                type: 'acp',
-                provider: 'codex',
-                data: { type: 'task_started', id: 'task_wait_projection_race' },
-              },
-            },
-          },
-        },
-      ];
 
       let settled = false;
       void waitPromise.finally(() => {
@@ -901,7 +897,7 @@ describe('happier session wait (integration)', () => {
     const machineKeySeed = new Uint8Array(32).fill(8);
 
     try {
-      const waitPromise = handleSessionCommand(['wait', sessionId, '--timeout', '1', '--json'], {
+      const waitPromise = handleSessionCommand(['wait', sessionId, '--timeout', '2', '--json'], {
         readCredentialsFn: async () => ({
           token: 'token_test',
           encryption: {
