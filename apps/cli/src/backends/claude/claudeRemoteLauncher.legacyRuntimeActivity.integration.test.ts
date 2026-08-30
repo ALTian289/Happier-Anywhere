@@ -4,19 +4,19 @@ import { MessageQueue2 } from '@/agent/runtime/modeMessageQueue';
 import type { SessionClientPort } from '@/api/session/sessionClientPort';
 import type { AgentState, Metadata } from '@/api/types';
 import type { SessionRuntimeActivityContribution } from '@/session/runtimeActivity/types';
-import type { SDKMessage, SDKUserMessage } from '@/backends/claude/sdk';
+import type { SDKMessage } from '@/backends/claude/sdk';
 
 import type { EnhancedMode } from './loop';
 import { hashClaudeEnhancedModeForQueue } from './remote/modeHash';
+import { isClaudeLegacyRequiredHookObservationFailure } from './remote/runtimeActivityEvidence';
 import { Session } from './session';
 
-const mockQuery = vi.hoisted(() => vi.fn());
+const mockClaudeRemote = vi.hoisted(() => vi.fn());
 const mockClaudeRemoteAgentSdk = vi.hoisted(() => vi.fn());
 const mockRunClaudeUnifiedTerminalSession = vi.hoisted(() => vi.fn());
 
-vi.mock('@/backends/claude/sdk', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/backends/claude/sdk')>();
-  return { ...actual, query: mockQuery };
+vi.mock('./claudeRemote', () => {
+  return { claudeRemote: mockClaudeRemote };
 });
 
 vi.mock('./remote/claudeRemoteAgentSdk', async (importOriginal) => {
@@ -29,23 +29,15 @@ vi.mock('./unifiedTerminal/runClaudeUnifiedTerminalSession', async (importOrigin
   return { ...actual, runClaudeUnifiedTerminalSession: mockRunClaudeUnifiedTerminalSession };
 });
 
-vi.mock('@/runtime/js/ensureJavaScriptRuntimeExecutable', () => ({
-  ensureJavaScriptRuntimeExecutable: vi.fn(async () => '/managed/js-runtime'),
-}));
-
-vi.mock('./utils/resolveClaudeCliPath', () => ({
-  resolveClaudeCliPath: vi.fn(() => '/resolved/claude-cli.js'),
-}));
-
 type RpcHandler = (params?: unknown) => unknown | Promise<unknown>;
 
-type QueryConfig = Readonly<{
-  prompt: AsyncIterable<SDKUserMessage>;
-  onMessageReceived?: (message: SDKMessage) => void;
-  onPromptTransportOutcome?: (
-    message: SDKUserMessage,
-    outcome: 'accepted' | 'rejected_before_effect' | 'effect_may_have_occurred',
-  ) => void;
+type LegacyRunnerConfig = Readonly<{
+  nextMessage: () => Promise<unknown | null>;
+  onWorkflowActivityObserverReady?: (() => void) | null;
+  onProviderActivityObservationLost?: (() => void) | null;
+  runtimeActivityAdapter?: Readonly<{
+    activateObservation: (reason: string) => Promise<void>;
+  }> | null;
 }>;
 
 type ContributionObservation = Readonly<{
@@ -168,11 +160,6 @@ function createHarness(): Readonly<{
   return { session, observations, switchHandlerReady: switchDeferred.promise };
 }
 
-function emitStreamRow(config: QueryConfig, message: SDKMessage): SDKMessage {
-  config.onMessageReceived?.(message);
-  return message;
-}
-
 async function runLegacySubscriberScenario(params: Readonly<{
   hookResponses: readonly SDKMessage[];
   expectedAfterTerminal: 'idle' | 'unknown';
@@ -191,54 +178,56 @@ async function runLegacySubscriberScenario(params: Readonly<{
     }
   };
   const { session, observations, switchHandlerReady } = createHarness();
-  const queryStarted = createDeferred<void>();
+  const legacyRunnerStarted = createDeferred<void>();
   const launchHookEmitted = createDeferred<void>();
   const terminalHookConsumed = createDeferred<void>();
   const releaseProvider = createDeferred<void>();
   let providerInputConsumed = false;
 
-  mockQuery.mockImplementationOnce((config: QueryConfig) => {
-    queryStarted.resolve(undefined);
-    return {
-      async *[Symbol.asyncIterator]() {
-        // This exact launch is emitted synchronously with the provider's first
-        // prompt read. Missing/late launcher subscription would lose it.
-        session.onClaudeSessionHook({
-          hook_event_name: 'PostToolUse',
-          session_id: 'claude-current',
-          tool_name: 'Agent',
-          tool_response: { status: 'async_launched', agentId: 'agent-1' },
-        });
-        launchHookEmitted.resolve(undefined);
+  mockClaudeRemote.mockImplementationOnce(async (config: LegacyRunnerConfig) => {
+    // claudeRemoteDispatch owns the first provider-input read and gives the
+    // selected legacy runner a replayable view of that same batch.
+    await expect(config.nextMessage()).resolves.not.toBeNull();
+    legacyRunnerStarted.resolve(undefined);
 
-        const prompt = await config.prompt[Symbol.asyncIterator]().next();
-        expect(prompt.done).toBe(false);
-        if (!prompt.done) config.onPromptTransportOutcome?.(prompt.value, 'accepted');
-        providerInputConsumed = true;
+    config.onWorkflowActivityObserverReady?.();
+    await config.runtimeActivityAdapter?.activateObservation(
+      'claude-legacy-provider-observer-installed',
+    );
 
-        yield emitStreamRow(config, {
-          type: 'system', subtype: 'init', session_id: 'claude-current',
-        } as SDKMessage);
-        for (const response of params.hookResponses) {
-          yield emitStreamRow(config, response);
-        }
+    // This launch happens only after the real dispatcher has selected the
+    // legacy runner, so the launcher's authenticated hook subscriber is live.
+    session.onClaudeSessionHook({
+      hook_event_name: 'PostToolUse',
+      session_id: 'claude-current',
+      tool_name: 'Agent',
+      tool_response: { status: 'async_launched', agentId: 'agent-1' },
+    });
+    launchHookEmitted.resolve(undefined);
+    providerInputConsumed = true;
 
-        // A terminal after a genuine observation gap must become unknown, not
-        // idle. When every response was inert, the same terminal remains idle.
-        session.onClaudeSessionHook({
-          hook_event_name: 'SubagentStop',
-          session_id: 'claude-current',
-          agent_id: 'agent-1',
-        });
-        terminalHookConsumed.resolve(undefined);
+    // Keep the classifier real while replacing only the provider process loop.
+    // claudeRemote performs this check for every streamed hook_response row.
+    for (const response of params.hookResponses) {
+      if (isClaudeLegacyRequiredHookObservationFailure(response, 'claude-current')) {
+        config.onProviderActivityObservationLost?.();
+      }
+    }
 
-        // Keep the provider alive until the test begins the switch. Provider
-        // interruption has separate contract coverage; this fixture owns provider
-        // completion explicitly so its Runtime Activity assertions cannot deadlock
-        // on the launcher's interrupt-registration timing.
-        await releaseProvider.promise;
-      },
-    };
+    // A terminal after a genuine observation gap must become unknown, not
+    // idle. When every response was inert, the same terminal remains idle.
+    session.onClaudeSessionHook({
+      hook_event_name: 'SubagentStop',
+      session_id: 'claude-current',
+      agent_id: 'agent-1',
+    });
+    terminalHookConsumed.resolve(undefined);
+
+    // Keep the provider alive until the test begins the switch. Provider
+    // interruption has separate contract coverage; this fixture owns provider
+    // completion explicitly so its Runtime Activity assertions cannot deadlock
+    // on the launcher's interrupt-registration timing.
+    await releaseProvider.promise;
   });
 
   session.queue.push(
@@ -258,10 +247,10 @@ async function runLegacySubscriberScenario(params: Readonly<{
     (error: unknown) => ({ type: 'rejected' as const, error }),
   );
 
-  await expect(awaitPhase('legacy query start', Promise.race([
-    queryStarted.promise.then(() => ({ type: 'query-started' as const })),
+  await expect(awaitPhase('legacy runner start', Promise.race([
+    legacyRunnerStarted.promise.then(() => ({ type: 'runner-started' as const })),
     launchOutcome,
-  ]))).resolves.toEqual({ type: 'query-started' });
+  ]))).resolves.toEqual({ type: 'runner-started' });
   expect(observations[0]).toEqual({
     snapshot: { state: 'idle', activeCount: 0 },
     reason: 'claude-remote-input-consumer-ready',
@@ -308,7 +297,7 @@ describe.sequential('claudeRemoteLauncher legacy Runtime Activity subscriber', (
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockQuery.mockReset();
+    mockClaudeRemote.mockReset();
     mockClaudeRemoteAgentSdk.mockReset();
     mockRunClaudeUnifiedTerminalSession.mockReset();
     process.env.HAPPIER_CLAUDE_REMOTE_INTERRUPT_THEN_TEARDOWN_GRACE_MS = '0';
