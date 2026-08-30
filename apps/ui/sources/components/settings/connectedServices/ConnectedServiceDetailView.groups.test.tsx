@@ -78,6 +78,7 @@ function notifyProfileStateChanged() {
 
 function createProfileSnapshot(groups: unknown[] = []) {
     return {
+        connectedServiceCredentialRevisionsV1: [],
         connectedServicesV2: [
             {
                 serviceId: 'openai-codex',
@@ -477,11 +478,6 @@ describe('ConnectedServiceDetailView pools segment', () => {
 
         await act(async () => {
             await disconnect!.onPress();
-            // AccountBlock actions intentionally fire-and-forget the async disconnect flow.
-            // Drain each awaited boundary (confirm, credential deletion, settings cleanup,
-            // profile refresh, and authoritative group refresh) before asserting its effects.
-            await flushAsyncHandlers();
-            await flushAsyncHandlers();
             await flushAsyncHandlers();
         });
 

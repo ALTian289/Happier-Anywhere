@@ -1,6 +1,6 @@
 import React from 'react';
 import { act } from 'react-test-renderer';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it as vitestIt, vi } from 'vitest';
 
 import { findGestureByKind, renderHook, renderScreen, standardCleanup } from '@/dev/testkit';
 import type { SessionListViewItem } from '@/sync/domains/state/storage';
@@ -775,6 +775,34 @@ function findRecordedGestureDetectors(
         String(node.type) === 'GestureDetector' && Boolean(findGestureByKind(node.props.gesture, 'pan'))
     );
 }
+
+/**
+ * Register one quarter of this suite from each adjacent `part*.test.tsx` wrapper.
+ * File-level Vitest sharding cannot split a single test file, and running all of
+ * these React Native render cases in one worker can exceed the 8 GB CI heap.
+ */
+export function registerSessionsListNativeVirtualizationTests(
+    shardIndex: number,
+    shardCount: number = 4,
+) {
+    if (!Number.isInteger(shardIndex) || shardIndex < 0 || shardIndex >= shardCount) {
+        throw new Error(`Invalid SessionsList test shard ${shardIndex}/${shardCount}`);
+    }
+    let testBlockIndex = 0;
+    const includeNextTestBlock = () => {
+        const include = testBlockIndex % shardCount === shardIndex;
+        testBlockIndex += 1;
+        return include;
+    };
+    const registerTest = (...args: any[]) => {
+        if (!includeNextTestBlock()) return undefined;
+        return (vitestIt as any)(...args);
+    };
+    const registerEach = (...cases: any[]) => {
+        if (!includeNextTestBlock()) return () => undefined;
+        return (vitestIt.each as any)(...cases);
+    };
+    const it = Object.assign(registerTest, { each: registerEach }) as typeof vitestIt;
 
 describe('SessionsList (native virtualization)', () => {
     beforeEach(async () => {
@@ -3697,3 +3725,4 @@ describe('SessionsList (native virtualization)', () => {
         expect(title?.props.ellipsizeMode).toBe('head');
     });
 });
+}
