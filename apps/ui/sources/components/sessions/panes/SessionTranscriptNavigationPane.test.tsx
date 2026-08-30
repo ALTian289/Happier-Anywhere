@@ -218,11 +218,18 @@ describe('SessionTranscriptNavigationPane', () => {
             />,
         );
 
-        await screen.pressByTestIdAsync(ENTRY_TEST_ID);
-        expect(onEntryPress).not.toHaveBeenCalled();
+        vi.useFakeTimers();
+        try {
+            await screen.pressByTestIdAsync(ENTRY_TEST_ID);
+            expect(onEntryPress).not.toHaveBeenCalled();
 
-        await flushDeferredJump();
-        expect(onEntryPress).toHaveBeenCalledTimes(1);
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(0);
+            });
+            expect(onEntryPress).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('jumps straight through the registered handler when the transcript is already visible beside the pane', async () => {
