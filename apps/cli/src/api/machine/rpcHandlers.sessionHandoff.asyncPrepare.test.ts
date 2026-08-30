@@ -568,7 +568,12 @@ describe('rpcHandlers (session handoff async prepare)', () => {
       });
     } finally {
       vi.resetModules();
-      await rm(activeServerDir, { recursive: true, force: true });
+      await rm(activeServerDir, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 25,
+      });
       await rm(targetPath, { recursive: true, force: true });
     }
   });
