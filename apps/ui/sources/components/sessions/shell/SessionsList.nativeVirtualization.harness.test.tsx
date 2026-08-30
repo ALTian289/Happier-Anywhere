@@ -977,23 +977,15 @@ describe('SessionsList (native virtualization)', () => {
     });
 
     it.each([
-        { headerKind: 'attention' as const, groupKind: 'attention' as const, title: 'Needs Attention' },
-        { headerKind: 'working' as const, groupKind: 'working' as const, title: 'Working' },
-    ])('shows the header controls on the $headerKind placement group when it is the first visible section', async ({ headerKind, groupKind, title }) => {
+        { headerKind: 'attention' as const, title: 'Needs Attention' },
+        { headerKind: 'working' as const, title: 'Working' },
+    ])('shows the header controls on the $headerKind placement group when it is the first visible section', async ({ headerKind, title }) => {
         mockVisibleSessionListViewData = [
             {
                 type: 'header',
                 title,
                 headerKind,
                 groupKey: headerKind,
-                serverId: 'server_a',
-                serverName: 'Server A',
-            },
-            {
-                type: 'session',
-                session: sessionA,
-                groupKey: headerKind,
-                groupKind,
                 serverId: 'server_a',
                 serverName: 'Server A',
             },
