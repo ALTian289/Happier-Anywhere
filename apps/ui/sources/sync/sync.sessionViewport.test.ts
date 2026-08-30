@@ -142,6 +142,25 @@ describe('sync session viewport', () => {
         });
     });
 
+    it('retains an observed viewport after many other sessions become visible', async () => {
+        const { sync } = await import('./sync');
+
+        sync.onSessionViewportChange('session-a', {
+            isPinned: false,
+            offsetY: 500,
+            shouldRestoreViewport: true,
+        });
+        for (let index = 0; index < 15; index += 1) {
+            sync.onSessionVisible(`session-intervening-${index}`);
+        }
+
+        expect(sync.getSessionViewport('session-a')).toMatchObject({
+            isPinned: false,
+            offsetY: 500,
+            source: 'observed',
+        });
+    });
+
     it('preserves live-tail default for position-unknown detach reports without prior observation', async () => {
         const { sync } = await import('./sync');
         const runtimeSync = sync as unknown as RuntimeViewportChangeSync;

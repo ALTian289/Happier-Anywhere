@@ -1436,6 +1436,9 @@ export function createCliActionDeps(params: Readonly<{
           ? Math.min(3600, timeoutSeconds)
           : 300;
       const normalizedPermissionModeOverride = normalizeString(permissionModeOverride);
+      if (normalizedPermissionModeOverride && !parsePermissionIntentAlias(normalizedPermissionModeOverride)) {
+        return { ok: false, errorCode: 'invalid_parameters', error: 'invalid_parameters' };
+      }
       if (normalizedPermissionModeOverride && callerSurface === 'session_agent') {
         const permissionDenied = await denyPermissionEscalationForRequestedMode(normalizedPermissionModeOverride);
         if (permissionDenied) {

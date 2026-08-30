@@ -186,9 +186,6 @@ async function runLegacySubscriberScenario(params: Readonly<{
   mockQuery.mockImplementationOnce((config: QueryConfig) => {
     queryStarted.resolve(undefined);
     return {
-      interrupt: vi.fn(async () => {
-        releaseProvider.resolve(undefined);
-      }),
       async *[Symbol.asyncIterator]() {
         // This exact launch is emitted synchronously with the provider's first
         // prompt read. Missing/late launcher subscription would lose it.
@@ -225,11 +222,10 @@ async function runLegacySubscriberScenario(params: Readonly<{
         });
         terminalHookConsumed.resolve(undefined);
 
-        // Keep the provider alive until the switch exercises the same interrupt
-        // contract exposed by a real Agent SDK query. The previous fixture ended
-        // the turn with a synthetic result and could race into the launcher's
-        // next-input wait before teardown, leaving the test suspended for the
-        // full integration timeout.
+        // Keep the provider alive until the test begins the switch. Provider
+        // interruption has separate contract coverage; this fixture owns provider
+        // completion explicitly so its Runtime Activity assertions cannot deadlock
+        // on the launcher's interrupt-registration timing.
         await releaseProvider.promise;
       },
     };
@@ -272,7 +268,9 @@ async function runLegacySubscriberScenario(params: Readonly<{
   });
 
   const switchHandler = await switchHandlerReady;
-  await expect(switchHandler({ to: 'local' })).resolves.toBe(true);
+  const switchPromise = switchHandler({ to: 'local' });
+  releaseProvider.resolve(undefined);
+  await expect(switchPromise).resolves.toBe(true);
   await expect(launcherPromise).resolves.toBe('switch');
 
   const observationCountAfterExit = observations.length;

@@ -196,10 +196,8 @@ jobs:
           filters: |
             ui_e2e:
               - 'apps/ui/**'
-              - 'apps/server/**'
-              - 'apps/cli/**'
+              - '!apps/ui/**/*.{test,spec}.{ts,tsx,js,jsx,mjs,cjs}'
               - 'packages/tests/**'
-              - '.github/workflows/tests.yml'
               - 'package.json'
               - 'yarn.lock'
 

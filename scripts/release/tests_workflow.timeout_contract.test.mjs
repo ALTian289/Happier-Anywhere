@@ -37,6 +37,16 @@ test('tests workflow keeps slow CI jobs above the observed timeout floor', async
     /\.project\/logs\/e2e\/\*-ui-e2e-\*\/\*\*\/\*\.log/,
     'UI E2E failure artifacts should include daemon, server, and CLI runtime logs',
   );
+  assert.match(
+    uiE2eJob,
+    /ui_e2e:\s*\n\s*- 'apps\/ui\/\*\*'\s*\n\s*- '!apps\/ui\/\*\*\/\*\.\{test,spec\}\.\{ts,tsx,js,jsx,mjs,cjs\}'\s*\n\s*- 'packages\/tests\/\*\*'/,
+    'UI E2E should run for UI implementation and E2E harness changes while ignoring UI-only unit-test edits',
+  );
+  assert.doesNotMatch(
+    uiE2eJob,
+    /ui_e2e:[\s\S]*?\n\s*- 'apps\/(?:cli|server)\/\*\*'/,
+    'ordinary CLI and server edits should not fan out the expensive UI E2E matrix',
+  );
 
   assert.match(
     uiJob,
