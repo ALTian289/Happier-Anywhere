@@ -193,6 +193,7 @@ jobs:
         if: github.event_name != 'workflow_call'
         uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
         with:
+          predicate-quantifier: every
           filters: |
             ui_e2e:
               - 'apps/ui/**'

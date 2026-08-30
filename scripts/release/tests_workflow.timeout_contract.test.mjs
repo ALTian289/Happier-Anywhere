@@ -39,7 +39,7 @@ test('tests workflow keeps slow CI jobs above the observed timeout floor', async
   );
   assert.match(
     uiE2eJob,
-    /ui_e2e:\s*\n\s*- 'apps\/ui\/\*\*'\s*\n\s*- '!apps\/ui\/\*\*\/\*\.\{test,spec\}\.\{ts,tsx,js,jsx,mjs,cjs\}'\s*\n\s*- 'packages\/tests\/\*\*'/,
+    /predicate-quantifier:\s*every[\s\S]*?ui_e2e:\s*\n\s*- 'apps\/ui\/\*\*'\s*\n\s*- '!apps\/ui\/\*\*\/\*\.\{test,spec\}\.\{ts,tsx,js,jsx,mjs,cjs\}'\s*\n\s*- 'packages\/tests\/\*\*'/,
     'UI E2E should run for UI implementation and E2E harness changes while ignoring UI-only unit-test edits',
   );
   assert.doesNotMatch(
