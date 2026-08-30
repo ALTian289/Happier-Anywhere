@@ -777,7 +777,7 @@ function findRecordedGestureDetectors(
 }
 
 /**
- * Register one quarter of this suite from each adjacent `part*.test.tsx` wrapper.
+ * Register a deterministic subset of this suite from the lightweight `part*.test.tsx` wrappers.
  * The shared file keeps a test suffix for source-policy scanners but is excluded
  * from direct Vitest collection in vitest.config.ts.
  * File-level Vitest sharding cannot split a single test file, and running all of
