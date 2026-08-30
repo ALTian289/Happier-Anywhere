@@ -177,8 +177,22 @@ async function runLegacySubscriberScenario(params: Readonly<{
   hookResponses: readonly SDKMessage[];
   expectedAfterTerminal: 'idle' | 'unknown';
 }>): Promise<void> {
+  const awaitPhase = async <T>(label: string, promise: Promise<T>): Promise<T> => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error(`timed out waiting for ${label}`)), 5_000);
+        }),
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  };
   const { session, observations, switchHandlerReady } = createHarness();
   const queryStarted = createDeferred<void>();
+  const launchHookEmitted = createDeferred<void>();
   const terminalHookConsumed = createDeferred<void>();
   const releaseProvider = createDeferred<void>();
   let providerInputConsumed = false;
@@ -195,11 +209,7 @@ async function runLegacySubscriberScenario(params: Readonly<{
           tool_name: 'Agent',
           tool_response: { status: 'async_launched', agentId: 'agent-1' },
         });
-        await vi.waitFor(() => {
-          expect(observations.some(({ snapshot }) => (
-            snapshot.state === 'active' && snapshot.activeCount === 1
-          ))).toBe(true);
-        });
+        launchHookEmitted.resolve(undefined);
 
         const prompt = await config.prompt[Symbol.asyncIterator]().next();
         expect(prompt.done).toBe(false);
@@ -248,30 +258,39 @@ async function runLegacySubscriberScenario(params: Readonly<{
     (error: unknown) => ({ type: 'rejected' as const, error }),
   );
 
-  await expect(Promise.race([
+  await expect(awaitPhase('legacy query start', Promise.race([
     queryStarted.promise.then(() => ({ type: 'query-started' as const })),
     launchOutcome,
-  ])).resolves.toEqual({ type: 'query-started' });
+  ]))).resolves.toEqual({ type: 'query-started' });
   expect(observations[0]).toEqual({
     snapshot: { state: 'idle', activeCount: 0 },
     reason: 'claude-remote-input-consumer-ready',
   });
-  await vi.waitFor(() => expect(providerInputConsumed).toBe(true));
-  await terminalHookConsumed.promise;
-  await vi.waitFor(() => {
+  await awaitPhase('legacy launch hook', launchHookEmitted.promise);
+  await awaitPhase('legacy active observation', vi.waitFor(() => {
+    expect(observations.some(({ snapshot }) => (
+      snapshot.state === 'active' && snapshot.activeCount === 1
+    ))).toBe(true);
+  }));
+  await awaitPhase('legacy provider input', vi.waitFor(() => expect(providerInputConsumed).toBe(true)));
+  await awaitPhase('legacy terminal hook', terminalHookConsumed.promise);
+  await awaitPhase('legacy terminal observation', vi.waitFor(() => {
     expect(observations.at(-1)).toEqual({
       snapshot: params.expectedAfterTerminal === 'unknown'
         ? { state: 'unknown', activeCount: 0 }
         : { state: 'idle', activeCount: 0 },
       reason: 'claude-native-terminal',
     });
-  });
+  }));
 
-  const switchHandler = await switchHandlerReady;
-  const switchPromise = switchHandler({ to: 'local' });
+  const switchHandler = await awaitPhase('switch handler registration', switchHandlerReady);
+  const switchPromise = Promise.resolve(switchHandler({ to: 'local' }));
   releaseProvider.resolve(undefined);
-  await expect(switchPromise).resolves.toBe(true);
-  await expect(launcherPromise).resolves.toBe('switch');
+  await expect(awaitPhase('legacy launcher shutdown', Promise.all([
+    switchPromise,
+    session.cleanup(),
+    launcherPromise,
+  ]))).resolves.toEqual([true, undefined, 'switch']);
 
   const observationCountAfterExit = observations.length;
   session.onClaudeSessionHook({

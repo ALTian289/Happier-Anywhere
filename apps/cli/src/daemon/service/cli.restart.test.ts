@@ -387,6 +387,9 @@ describe('runDaemonServiceCliCommand', () => {
         return {
           ...actual,
           spawnSync: vi.fn((command: string, args: readonly string[] = []) => {
+            if (command === 'powershell.exe' && String(args.at(-1) ?? '').includes('Stop-ScheduledTask')) {
+              lifecycleEvents.push('Stop-ScheduledTask');
+            }
             if (command !== 'schtasks') {
               return { status: 0, stdout: Buffer.from(''), stderr: Buffer.from('') };
             }
@@ -460,7 +463,7 @@ describe('runDaemonServiceCliCommand', () => {
         output.restore();
       }
 
-      expect(lifecycleEvents.slice(0, 3)).toEqual(['stopDaemon', '/End', '/Run']);
+      expect(lifecycleEvents.slice(0, 3)).toEqual(['stopDaemon', 'Stop-ScheduledTask', '/Run']);
     });
   });
 

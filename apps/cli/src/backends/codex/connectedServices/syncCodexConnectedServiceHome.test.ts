@@ -497,11 +497,13 @@ describe('syncCodexConnectedServiceHome', () => {
 
   it('serializes concurrent syncs for the same destination Codex home', async () => {
     const { root, sourceCodexHome, destinationCodexHome } = await createCodexHomePair();
+    let releaseFirstSymlink: () => void = () => {};
+    let firstSync: Promise<unknown> | null = null;
+    let secondSync: Promise<unknown> | null = null;
     try {
       await mkdir(join(sourceCodexHome, 'sessions'), { recursive: true });
       await writeFile(join(sourceCodexHome, 'sessions', 'source-rollout.jsonl'), '{"id":"source"}\n');
       const symlinkCalls: string[] = [];
-      let releaseFirstSymlink!: () => void;
       const firstSymlinkCanFinish = new Promise<void>((resolve) => {
         releaseFirstSymlink = resolve;
       });
@@ -525,20 +527,20 @@ describe('syncCodexConnectedServiceHome', () => {
       });
       const syncCodexConnectedServiceHome = await loadSyncCodexConnectedServiceHome();
 
-      const firstSync = syncCodexConnectedServiceHome({
+      firstSync = syncCodexConnectedServiceHome({
         destinationCodexHome,
         accountSettings: settings('linked', 'shared'),
         processEnv: { CODEX_HOME: sourceCodexHome },
       });
       await waitFor(() => symlinkCalls.length === 1);
-      const secondSync = syncCodexConnectedServiceHome({
+      secondSync = syncCodexConnectedServiceHome({
         destinationCodexHome,
         accountSettings: settings('linked', 'shared'),
         processEnv: { CODEX_HOME: sourceCodexHome },
       });
       let overlapped = false;
       try {
-        await waitFor(() => symlinkCalls.length > 1);
+        await waitFor(() => symlinkCalls.length > 1, { timeoutMs: 100, pollMs: 5 });
         overlapped = true;
       } catch (error) {
         if (!(error instanceof Error) || !error.message.includes('Timed out')) throw error;
@@ -549,6 +551,11 @@ describe('syncCodexConnectedServiceHome', () => {
       await Promise.all([firstSync, secondSync]);
       expect(symlinkCalls).toHaveLength(4);
     } finally {
+      releaseFirstSymlink();
+      await Promise.allSettled([
+        firstSync ?? Promise.resolve(),
+        secondSync ?? Promise.resolve(),
+      ]);
       await rm(root, { recursive: true, force: true });
     }
   });

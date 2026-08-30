@@ -32,11 +32,17 @@ export async function createCodexHomePair(): Promise<{
   return { root, sourceCodexHome, destinationCodexHome };
 }
 
-export async function waitFor(condition: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+export async function waitFor(
+  condition: () => boolean,
+  options: Readonly<{ timeoutMs?: number; pollMs?: number }> = {},
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 5_000;
+  const pollMs = options.pollMs ?? 10;
+  const deadline = Date.now() + timeoutMs;
+  do {
     if (condition()) return;
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  }
+    await new Promise<void>((resolve) => setTimeout(resolve, pollMs));
+  } while (Date.now() < deadline);
   throw new Error('Timed out waiting for test condition');
 }
 
