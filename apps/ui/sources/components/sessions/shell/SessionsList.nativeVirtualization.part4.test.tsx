@@ -1,3 +1,3 @@
-import { registerSessionsListNativeVirtualizationTests } from './SessionsList.nativeVirtualization.testHarness';
+import { registerSessionsListNativeVirtualizationTests } from './SessionsList.nativeVirtualization.harness.test';
 
 registerSessionsListNativeVirtualizationTests(3);

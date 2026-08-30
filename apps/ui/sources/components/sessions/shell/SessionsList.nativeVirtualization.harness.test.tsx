@@ -778,6 +778,8 @@ function findRecordedGestureDetectors(
 
 /**
  * Register one quarter of this suite from each adjacent `part*.test.tsx` wrapper.
+ * The shared file keeps a test suffix for source-policy scanners but is excluded
+ * from direct Vitest collection in vitest.config.ts.
  * File-level Vitest sharding cannot split a single test file, and running all of
  * these React Native render cases in one worker can exceed the 8 GB CI heap.
  */

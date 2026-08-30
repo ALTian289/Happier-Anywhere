@@ -139,6 +139,9 @@ export default defineConfig({
             'tools/**/*.{spec,test}.{ts,tsx}',
         ],
         exclude: [
+            // Imported by four lightweight wrapper suites. Keep the shared body
+            // scanner-visible as test code without collecting it as a fifth suite.
+            'sources/components/sessions/shell/SessionsList.nativeVirtualization.harness.test.tsx',
             'sources/**/*.integration.test.{ts,tsx}',
             'sources/**/*.real.integration.test.{ts,tsx}',
             'sources/**/*.integration.spec.{ts,tsx}',
