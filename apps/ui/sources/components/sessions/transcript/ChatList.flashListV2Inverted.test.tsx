@@ -1762,7 +1762,7 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
 
             const { ChatList } = await import('./ChatList');
             const screen = await renderFlashListChatList(
-                <ChatList session={flashListChatListHarnessState.sessionState} jumpToSeq={1} />,
+                <ChatList session={flashListChatListHarnessState.sessionState} />,
             );
             await screen.triggerInitialFill({
                 layoutHeight: 500,
@@ -1788,7 +1788,6 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
                 screen.tree.update(
                     <ChatList
                         session={{ ...flashListChatListHarnessState.sessionState }}
-                        jumpToSeq={1}
                         onEditPendingMessage={vi.fn()}
                     />,
                 );
@@ -1815,7 +1814,6 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
                 screen.tree.update(
                     <ChatList
                         session={{ ...flashListChatListHarnessState.sessionState }}
-                        jumpToSeq={1}
                         onEditPendingMessage={vi.fn()}
                     />,
                 );
@@ -1876,7 +1874,7 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
             const { ChatList } = await import('./ChatList');
             const forceRerenderEditPendingMessage = vi.fn();
             const screen = await renderFlashListChatList(
-                <ChatList session={flashListChatListHarnessState.sessionState} jumpToSeq={10} />,
+                <ChatList session={flashListChatListHarnessState.sessionState} />,
             );
             await screen.triggerInitialFill({
                 layoutHeight: 500,
@@ -1894,7 +1892,6 @@ describe('ChatList (FlashList v2 inverted pilot)', () => {
                 screen.tree.update(
                     <ChatList
                         session={{ ...flashListChatListHarnessState.sessionState }}
-                        jumpToSeq={10}
                         onEditPendingMessage={forceRerenderEditPendingMessage}
                     />,
                 );

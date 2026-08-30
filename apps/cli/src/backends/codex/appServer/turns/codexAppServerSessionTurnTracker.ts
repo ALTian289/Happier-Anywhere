@@ -257,12 +257,40 @@ export function createCodexAppServerSessionTurnTracker(params: Readonly<{
         const startUserMessageSeq = normalizeSeq(paramsForTurn.startUserMessageSeq);
         const startSeqInclusive = normalizeSeq(paramsForTurn.startSeqInclusive);
         if (activeTurn.kind === 'unavailable') {
+            const unavailableTurnId = activeTurn.turnId;
+            const resolvedStartSeqInclusive = startSeqInclusive ?? startUserMessageSeq;
+            if (startUserMessageSeq !== null && providerTurnId) {
+                const transcriptAnchors = buildInitialTranscriptAnchors(startUserMessageSeq, resolvedStartSeqInclusive);
+                const lifecycle = params.session.sessionTurnLifecycle;
+                if (lifecycle) {
+                    try {
+                        await lifecycle.appendTranscriptAnchors({
+                            provider: CODEX_AGENT_ID,
+                            transcriptAnchors,
+                        });
+                        await lifecycle.attachProviderTurnId({
+                            provider: CODEX_AGENT_ID,
+                            providerTurnId,
+                        });
+                        const trackedTurnId = unavailableTurnId ?? providerTurnId;
+                        upsertInProgressSessionTurnEvidence(trackedTurnId, transcriptAnchors);
+                        activeTurn = { kind: 'tracked', turnId: trackedTurnId, providerTurnId };
+                        return true;
+                    } catch (error) {
+                        params.onMetadataWriteError?.(error);
+                    }
+                } else {
+                    upsertInProgressSessionTurnEvidence(providerTurnId, transcriptAnchors);
+                    activeTurn = { kind: 'tracked', turnId: providerTurnId, providerTurnId };
+                    return true;
+                }
+            }
             activeTurn = {
                 kind: 'unavailable',
-                turnId: activeTurn.turnId,
+                turnId: unavailableTurnId,
                 providerTurnId,
                 startUserMessageSeq,
-                startSeqInclusive: startSeqInclusive ?? startUserMessageSeq,
+                startSeqInclusive: resolvedStartSeqInclusive,
             };
             return true;
         }
@@ -403,12 +431,14 @@ export function createCodexAppServerSessionTurnTracker(params: Readonly<{
             localId?: string | null;
             startSeqInclusive: number | null;
         }>): Promise<void> {
-            if (!activeTurn || activeTurn.kind !== 'tracked') return;
-            const expectedActiveTurnId = activeTurn.turnId;
+            if (!activeTurn) return;
+            const expectedActiveTurn = activeTurn;
             const startUserMessageSeq = await resolveCommittedUserMessageSeq(paramsForPrompt.localId);
             if (startUserMessageSeq === null) return;
-            if (!activeTurn || activeTurn.kind !== 'tracked' || activeTurn.turnId !== expectedActiveTurnId) return;
-            const activeEntry = sessionTurnEvidence.entries.find((entry) => entry.turnId === expectedActiveTurnId);
+            if (activeTurn !== expectedActiveTurn) return;
+            const activeEntry = expectedActiveTurn.kind === 'tracked'
+                ? sessionTurnEvidence.entries.find((entry) => entry.turnId === expectedActiveTurn.turnId)
+                : null;
             if (activeEntry?.transcriptAnchors?.startUserMessageSeq === startUserMessageSeq) return;
             await mergeBeginIntoActiveTurn({
                 providerTurnId: activeTurn.providerTurnId,

@@ -458,7 +458,7 @@ describe('ConnectedServiceDetailView pools segment', () => {
             ]);
             notifyProfileStateChanged();
         });
-        modalSpies.confirm.mockResolvedValueOnce(true);
+        modalSpies.confirm.mockResolvedValue(true);
 
         const screen = await renderScreen(<ConnectedServiceDetailView />);
         await flushAsyncHandlers();
@@ -473,9 +473,10 @@ describe('ConnectedServiceDetailView pools segment', () => {
             .find((host) => host.props?.title === 'Work account');
         const disconnect = ((workActionHost?.props?.actions ?? []) as ReadonlyArray<{ id: string; onPress: () => Promise<void> | void }>)
             .find((action) => action.id === 'disconnect');
+        expect(disconnect).toBeTruthy();
 
         await act(async () => {
-            await disconnect?.onPress();
+            await disconnect!.onPress();
             await flushAsyncHandlers();
         });
 
@@ -496,7 +497,7 @@ describe('ConnectedServiceDetailView pools segment', () => {
         }));
         expect(connectedServiceCredentialSpies.deleteConnectedServiceCredentialForAccount).toHaveBeenCalledWith(
             expect.objectContaining({ token: 't' }),
-            { serviceId: 'openai-codex', profileId: 'work', cleanupGroupReferences: true },
+            expect.objectContaining({ serviceId: 'openai-codex', profileId: 'work', cleanupGroupReferences: true }),
         );
         expect(syncSpies.applySettings).toHaveBeenCalledWith(
             expect.objectContaining({

@@ -42,6 +42,10 @@ type RpcHandler = (params?: unknown) => unknown | Promise<unknown>;
 type QueryConfig = Readonly<{
   prompt: AsyncIterable<SDKUserMessage>;
   onMessageReceived?: (message: SDKMessage) => void;
+  onPromptTransportOutcome?: (
+    message: SDKUserMessage,
+    outcome: 'accepted' | 'rejected_before_effect' | 'effect_may_have_occurred',
+  ) => void;
 }>;
 
 type ContributionObservation = Readonly<{
@@ -202,6 +206,7 @@ async function runLegacySubscriberScenario(params: Readonly<{
 
         const prompt = await config.prompt[Symbol.asyncIterator]().next();
         expect(prompt.done).toBe(false);
+        if (!prompt.done) config.onPromptTransportOutcome?.(prompt.value, 'accepted');
         providerInputConsumed = true;
 
         yield emitStreamRow(config, {

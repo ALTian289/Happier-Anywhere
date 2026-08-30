@@ -21,8 +21,8 @@ inputs:
   trusted_actors:
     description: "Comma-separated list of explicitly trusted actors (e.g. a release bot) that can bypass team membership checks"
     required: false
-    # Scheduled workflows run as `github-actions` / `github-actions[bot]`. We treat these as trusted
-    # so nightly release automation can run, while workflow_dispatch still requires team membership.
+    # Keep first-party automation actors available for installations that use them. Repository
+    # owners are recognized separately from this caller-supplied bypass list below.
     default: "github-actions[bot],github-actions"
 
 runs:
@@ -35,6 +35,7 @@ runs:
         INPUT_ORG: ${{ inputs.org }}
         INPUT_TEAM_SLUG: ${{ inputs.team_slug }}
         INPUT_TRUSTED_ACTORS: ${{ inputs.trusted_actors }}
+        REPOSITORY_OWNER: ${{ github.repository_owner }}
       run: |
         set -euo pipefail
 
@@ -56,6 +57,9 @@ runs:
         echo "team_slug=${team_slug}" >> "$GITHUB_OUTPUT"
 
         trusted_actor=false
+        if [ -n "${REPOSITORY_OWNER:-}" ] && [ "${actor}" = "${REPOSITORY_OWNER}" ]; then
+          trusted_actor=true
+        fi
         IFS=',' read -r -a trusted <<< "${INPUT_TRUSTED_ACTORS:-}"
         for raw in "${trusted[@]}"; do
           candidate="$(echo "${raw}" | xargs)"
@@ -89,8 +93,14 @@ runs:
         APP_TOKEN: ${{ steps.app_token.outputs.token }}
         REPO: ${{ github.repository }}
         REPO_TOKEN: ${{ github.token }}
+        REPOSITORY_OWNER: ${{ github.repository_owner }}
       run: |
         set -euo pipefail
+
+        if [ -n "${REPOSITORY_OWNER:-}" ] && [ "${ACTOR}" = "${REPOSITORY_OWNER}" ]; then
+          echo "Actor '${ACTOR}' owns '${REPO}'; allowing release workflow."
+          exit 0
+        fi
 
         trusted_csv="${INPUT_TRUSTED_ACTORS:-}"
         if [ -n "${trusted_csv}" ]; then

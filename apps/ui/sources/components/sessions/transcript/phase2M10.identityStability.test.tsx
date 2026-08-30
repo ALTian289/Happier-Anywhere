@@ -239,6 +239,7 @@ describe('phase2 M10 hook identity stability', () => {
             lastRouteJumpProtectionClearingWebMovementAtMsRef: createRef(Number.NEGATIVE_INFINITY),
             lastScrollOffsetForIntentRef: createRef(null),
             lastUserScrollIntentAtMsRef: createRef(Number.NEGATIVE_INFINITY),
+            userScrollIntent: { clear: vi.fn() },
             latestCommittedActivityKey: null,
             lifecycleHost,
             listContentHeightRef: createRef(0),

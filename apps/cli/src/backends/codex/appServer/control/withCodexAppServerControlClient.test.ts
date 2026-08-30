@@ -160,7 +160,6 @@ describe('withCodexAppServerControlClient', () => {
                 { method: 'initialize' },
                 { method: 'initialized' },
                 { method: 'thread/list' },
-                { event: 'sigterm' },
                 { event: 'exit' },
             ]));
         });

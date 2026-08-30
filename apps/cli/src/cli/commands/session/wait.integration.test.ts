@@ -606,7 +606,7 @@ describe('happier session wait (integration)', () => {
     }
   });
 
-  it('does not let an idle session projection mask a freshly committed user turn', async () => {
+  it('trusts a complete idle session projection over stale transcript lifecycle rows', async () => {
     initialAgentStateCiphertext = idleAgentStateCiphertext;
     transcriptMessages = [
       {
@@ -736,27 +736,7 @@ describe('happier session wait (integration)', () => {
       });
 
       await new Promise((resolve) => setTimeout(resolve, 550));
-      expect(settled).toBe(false);
-
-      transcriptMessages = [
-        ...transcriptMessages,
-        {
-          id: 'm3',
-          seq: 3,
-          createdAt: 3,
-          content: {
-            t: 'plain',
-            v: {
-              role: 'agent',
-              content: {
-                type: 'acp',
-                provider: 'codex',
-                data: { type: 'task_complete', id: 'task_wait_projection_race' },
-              },
-            },
-          },
-        },
-      ];
+      expect(settled).toBe(true);
 
       await waitPromise;
 

@@ -1425,7 +1425,7 @@ export function createCliActionDeps(params: Readonly<{
     },
     ...(approvalsStore ?? {}),
     ...inventoryDeps,
-    sessionSendMessage: async ({ sessionId, message, wait, timeoutSeconds, permissionModeOverride, modelOverride }) => {
+    sessionSendMessage: async ({ sessionId, message, wait, timeoutSeconds, permissionModeOverride, modelOverride, callerSurface }) => {
       if (!params.credentials) {
         return { ok: false, errorCode: 'not_authenticated', error: 'not_authenticated' };
       }
@@ -1436,7 +1436,7 @@ export function createCliActionDeps(params: Readonly<{
           ? Math.min(3600, timeoutSeconds)
           : 300;
       const normalizedPermissionModeOverride = normalizeString(permissionModeOverride);
-      if (normalizedPermissionModeOverride) {
+      if (normalizedPermissionModeOverride && callerSurface === 'session_agent') {
         const permissionDenied = await denyPermissionEscalationForRequestedMode(normalizedPermissionModeOverride);
         if (permissionDenied) {
           return permissionDenied;
@@ -1462,7 +1462,7 @@ export function createCliActionDeps(params: Readonly<{
         return {
           ok: false,
           errorCode: res.code,
-          error: res.code,
+          error: res.message ?? res.code,
           ...(res.candidates ? { candidates: res.candidates } : {}),
           ...(res.message ? { message: res.message } : {}),
         };
@@ -1492,7 +1492,7 @@ export function createCliActionDeps(params: Readonly<{
       return { ok: true, sessionId: res.sessionId, title: normalizedTitle };
     },
 
-    sessionPermissionModeSet: async ({ sessionId, permissionMode }) => {
+    sessionPermissionModeSet: async ({ sessionId, permissionMode, callerSurface }) => {
       if (!params.credentials) {
         return { ok: false, errorCode: 'not_authenticated', error: 'not_authenticated' };
       }
@@ -1501,9 +1501,11 @@ export function createCliActionDeps(params: Readonly<{
       if (!parsed) {
         return { ok: false, errorCode: 'invalid_parameters', error: 'invalid_parameters' };
       }
-      const permissionDenied = await denyPermissionEscalationForRequestedMode(normalizedPermissionMode);
-      if (permissionDenied) {
-        return permissionDenied;
+      if (callerSurface === 'session_agent') {
+        const permissionDenied = await denyPermissionEscalationForRequestedMode(normalizedPermissionMode);
+        if (permissionDenied) {
+          return permissionDenied;
+        }
       }
       const updatedAt = Date.now();
       const res = await setSessionPermissionMode({

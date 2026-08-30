@@ -3253,11 +3253,11 @@ describe('ChatList (FlashList v2)', () => {
             const { ChatList } = await import('./ChatList');
 
             sessionMessagesState = { isLoaded: true, messages: messagesForSession(activeSessionId) };
-            const firstA = await renderTrackedFlashListChatList(
+            const screen = await renderTrackedFlashListChatList(
                 <ChatList session={{ ...sessionState, id: activeSessionId }} onViewportChange={onViewportChange} />,
             );
             await primeFlashListMetrics(100, 1000, { turns: 4 });
-            await settleNativeFlashListMount(firstA);
+            await settleNativeFlashListMount(screen);
             scrollToOffset.mockClear();
             onViewportChange.mockClear();
 
@@ -3268,8 +3268,6 @@ describe('ChatList (FlashList v2)', () => {
                 offsetY: 500,
                 source: 'observed',
             });
-            unmountTrackedFlashListChatList(firstA);
-
             for (let index = 0; index < 15; index += 1) {
                 activeSessionId = `session-intervening-${index}`;
                 sessionViewportByIdState.set(activeSessionId, {
@@ -3281,23 +3279,22 @@ describe('ChatList (FlashList v2)', () => {
                 });
                 sessionMessagesState = { isLoaded: true, messages: messagesForSession(activeSessionId) };
                 const interveningViewportChange = createViewportChangeHandler(activeSessionId);
-                const interveningScreen = await renderTrackedFlashListChatList(
+                await screen.update(
                     <ChatList session={{ ...sessionState, id: activeSessionId }} onViewportChange={interveningViewportChange} />,
                 );
                 await primeFlashListMetrics(100, 1000, { turns: 2 });
-                await settleNativeFlashListMount(interveningScreen);
-                unmountTrackedFlashListChatList(interveningScreen);
+                await settleNativeFlashListMount(screen);
             }
 
             scrollToOffset.mockClear();
             telemetrySink.mockClear();
             activeSessionId = 'session-a';
             sessionMessagesState = { isLoaded: true, messages: messagesForSession(activeSessionId) };
-            const restoredA = await renderTrackedFlashListChatList(
+            await screen.update(
                 <ChatList session={{ ...sessionState, id: activeSessionId }} onViewportChange={onViewportChange} />,
             );
             await primeFlashListMetrics(100, 1000, { turns: 4 });
-            await settleNativeFlashListMount(restoredA);
+            await settleNativeFlashListMount(screen);
 
             expect(scrollToOffset).toHaveBeenLastCalledWith({ offset: 500, animated: false });
             expect(sessionViewportByIdState.get('session-a')).toMatchObject({
@@ -12940,7 +12937,6 @@ describe('ChatList (FlashList v2)', () => {
                 <ChatList session={{ ...sessionState }} onViewportChange={onViewportChange} />,
             );
             await primeFlashListMetrics(667, 35736, { turns: 2 });
-            await settleNativeFlashListMount(screen);
 
             // Entry restore issued its one-shot distance write; transaction is still open.
             expect(scrollToOffset).toHaveBeenCalledWith({ offset: 657, animated: false });
