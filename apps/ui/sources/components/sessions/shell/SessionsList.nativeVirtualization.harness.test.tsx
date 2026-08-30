@@ -800,11 +800,7 @@ export function registerSessionsListNativeVirtualizationTests(
         if (!includeNextTestBlock()) return undefined;
         return (vitestIt as any)(...args);
     };
-    const registerEach = (...cases: any[]) => {
-        if (!includeNextTestBlock()) return () => undefined;
-        return (vitestIt.each as any)(...cases);
-    };
-    const it = Object.assign(registerTest, { each: registerEach }) as typeof vitestIt;
+    const it = registerTest as typeof vitestIt;
 
 describe('SessionsList (native virtualization)', () => {
     beforeEach(async () => {
@@ -976,25 +972,28 @@ describe('SessionsList (native virtualization)', () => {
         expect(screen.findAllByTestId('session-list-ordering-menu-trigger')).toHaveLength(1);
     });
 
-    it.each([
-        { headerKind: 'attention' as const, title: 'Needs Attention' },
-        { headerKind: 'working' as const, title: 'Working' },
-    ])('shows the header controls on the $headerKind placement group when it is the first visible section', async ({ headerKind, title }) => {
-        mockVisibleSessionListViewData = [
-            {
-                type: 'header',
-                title,
-                headerKind,
-                groupKey: headerKind,
-                serverId: 'server_a',
-                serverName: 'Server A',
-            },
-        ];
+    it('shows the header controls on attention and working placement groups when each is the first visible section', async () => {
+        for (const placement of [
+            { headerKind: 'attention' as const, title: 'Needs Attention' },
+            { headerKind: 'working' as const, title: 'Working' },
+        ]) {
+            mockVisibleSessionListViewData = [
+                {
+                    type: 'header',
+                    title: placement.title,
+                    headerKind: placement.headerKind,
+                    groupKey: placement.headerKind,
+                    serverId: 'server_a',
+                    serverName: 'Server A',
+                },
+            ];
 
-        const screen = await renderSessionsList();
+            const screen = await renderSessionsList();
 
-        expect(screen.findAllByTestId('session-list-search-trigger')).toHaveLength(1);
-        expect(screen.findAllByTestId('session-list-ordering-menu-trigger')).toHaveLength(1);
+            expect(screen.findAllByTestId('session-list-search-trigger')).toHaveLength(1);
+            expect(screen.findAllByTestId('session-list-ordering-menu-trigger')).toHaveLength(1);
+            standardCleanup();
+        }
     });
 
     it('keeps the header search control anchored to the section that opened it', async () => {
