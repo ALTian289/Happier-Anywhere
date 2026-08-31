@@ -74,7 +74,9 @@ afterEach(() => {
 });
 
 beforeEach(async () => {
-    vi.resetModules();
+    // The module's collaborators read the mutable mocks below at call time, so the
+    // module graph can stay shared across cases. Rebuilding the full UI graph for
+    // every test retains enough transformed modules to exhaust the CI heap.
     mockStorageState.sessionMessages = {};
     mockStorageState.sessions = {};
     mockStorageState.machines = {};
