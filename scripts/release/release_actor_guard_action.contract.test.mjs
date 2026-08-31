@@ -11,9 +11,14 @@ test('release-actor-guard action supports trusted actors and URL-encodes actor p
   const actionPath = resolve(repoRoot, '.github', 'actions', 'release-actor-guard', 'action.yml');
   const raw = fs.readFileSync(actionPath, 'utf8');
 
-  assert.match(raw, /\n\s*trusted_actors:\n/, 'action.yml must define a trusted_actors input');
+  assert.match(raw, /\r?\n\s*trusted_actors:\r?\n/, 'action.yml must define a trusted_actors input');
   assert.match(raw, /INPUT_TRUSTED_ACTORS/, 'action should pass trusted_actors into the verify step env');
   assert.match(raw, /\|@uri/, 'action should URL-encode actor when building GitHub API URLs');
+  assert.match(
+    raw,
+    /GITHUB_EVENT_NAME:-.*schedule[\s\S]*actor="\$\{REPOSITORY_OWNER\}"/,
+    'scheduled workflows should bind release authority to the current repository owner',
+  );
 });
 
 test('deploy workflows trust the release bot actor for push-triggered deployments', async () => {

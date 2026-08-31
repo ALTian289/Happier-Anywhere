@@ -40,6 +40,13 @@ runs:
         set -euo pipefail
 
         actor="${GITHUB_TRIGGERING_ACTOR:-${GITHUB_ACTOR:-}}"
+        # Scheduled workflows have no interactive caller. GitHub can retain a
+        # pre-rename login in GITHUB_TRIGGERING_ACTOR for an existing schedule,
+        # so bind scheduled release authority to the repository's current owner.
+        # All interactive and delegated events still authorize their real actor.
+        if [ "${GITHUB_EVENT_NAME:-}" = "schedule" ] && [ -n "${REPOSITORY_OWNER:-}" ]; then
+          actor="${REPOSITORY_OWNER}"
+        fi
         if [ -z "${actor}" ]; then
           echo "Unable to resolve triggering actor." >&2
           exit 1
