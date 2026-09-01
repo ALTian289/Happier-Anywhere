@@ -4,21 +4,16 @@ import test from 'node:test';
 
 import { parse } from 'yaml';
 
-test('nightly dev schedule avoids top-of-hour GitHub Actions load', () => {
+test('nightly dev releases are manual-only', () => {
   const workflow = parse(readFileSync('.github/workflows/nightly-dev.yml', 'utf8')) as {
     on?: {
       schedule?: Array<{ cron?: string }>;
+      workflow_dispatch?: unknown;
     };
   };
 
-  const schedules = workflow.on?.schedule ?? [];
-  assert.ok(schedules.length > 0, 'nightly-dev.yml should define a schedule');
-
-  for (const schedule of schedules) {
-    const cron = String(schedule.cron ?? '').trim();
-    const [minute] = cron.split(/\s+/);
-    assert.notEqual(minute, '0', `scheduled workflow cron should avoid minute 0: ${cron}`);
-  }
+  assert.equal(workflow.on?.schedule, undefined, 'nightly-dev.yml must not publish on a timer');
+  assert.ok(workflow.on?.workflow_dispatch, 'nightly-dev.yml should remain manually dispatchable');
 });
 
 test('extended DB matrix runs the bounded fast E2E lane for each external database', () => {

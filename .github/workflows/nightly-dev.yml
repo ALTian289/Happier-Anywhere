@@ -1,8 +1,6 @@
 name: NIGHTLY — Dev Releases
 
 on:
-  schedule:
-    - cron: "17 2 * * *"
   workflow_dispatch:
     inputs:
       source_ref:
