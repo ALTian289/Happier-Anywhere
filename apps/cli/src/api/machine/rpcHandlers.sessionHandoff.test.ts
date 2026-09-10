@@ -5991,11 +5991,12 @@ function createLoopbackMachineTransferChannels() {
       await published.dispose();
       isolatedHome.restore();
       if (process.env.HAPPIER_DEBUG_KEEP_HANDOFF_TMP !== '1') {
-        await rm(sourcePath, { recursive: true, force: true });
-        await rm(sourceActiveServerDir, { recursive: true, force: true });
-        await rm(targetActiveServerDir, { recursive: true, force: true });
-        await rm(targetPath, { recursive: true, force: true });
-        await rm(isolatedHome.homeDir, { recursive: true, force: true });
+        const cleanupOptions = { recursive: true, force: true, maxRetries: 10, retryDelay: 25 } as const;
+        await rm(sourcePath, cleanupOptions);
+        await rm(sourceActiveServerDir, cleanupOptions);
+        await rm(targetActiveServerDir, cleanupOptions);
+        await rm(targetPath, cleanupOptions);
+        await rm(isolatedHome.homeDir, cleanupOptions);
       }
     }
   });
