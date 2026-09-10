@@ -13,9 +13,6 @@ on:
         required: true
         default: ""
         type: string
-  schedule:
-    # Nightly (UTC)
-    - cron: "30 4 * * *"
 
 permissions:
   contents: read
@@ -25,25 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  stress-scheduled:
-    if: ${{ github.event_name == 'schedule' }}
-    uses: ./.github/workflows/tests.yml
-    with:
-      run_ui: false
-      run_server: false
-      run_cli: false
-      run_stack: false
-      run_typecheck: false
-      run_cli_daemon_e2e: false
-      run_e2e_core: false
-      run_providers: false
-      providers_preset: all
-      providers_tier: smoke
-      run_stress: true
-      stress_config: '{"repeat":"10","seed":""}'
-
-  stress-dispatch:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+  stress:
     uses: ./.github/workflows/tests.yml
     with:
       run_ui: false

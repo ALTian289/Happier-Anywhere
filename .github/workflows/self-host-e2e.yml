@@ -2,9 +2,6 @@ name: CI — Self-Host E2E
 
 on:
   workflow_dispatch:
-  schedule:
-    # Weekly (UTC)
-    - cron: "15 3 * * 0"
 
 permissions:
   contents: read

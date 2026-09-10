@@ -4,16 +4,27 @@ import test from 'node:test';
 
 import { parse } from 'yaml';
 
-test('nightly dev releases are manual-only', () => {
-  const workflow = parse(readFileSync('.github/workflows/nightly-dev.yml', 'utf8')) as {
-    on?: {
-      schedule?: Array<{ cron?: string }>;
-      workflow_dispatch?: unknown;
+test('resource-intensive workflows are manual-only', () => {
+  for (const workflowName of [
+    'nightly-dev.yml',
+    'stress-tests.yml',
+    'extended-db-tests.yml',
+    'self-host-e2e.yml',
+  ]) {
+    const workflow = parse(readFileSync(`.github/workflows/${workflowName}`, 'utf8')) as {
+      on?: {
+        schedule?: Array<{ cron?: string }>;
+        workflow_dispatch?: unknown;
+      };
     };
-  };
 
-  assert.equal(workflow.on?.schedule, undefined, 'nightly-dev.yml must not publish on a timer');
-  assert.ok(workflow.on?.workflow_dispatch, 'nightly-dev.yml should remain manually dispatchable');
+    const triggers = workflow.on ?? {};
+    assert.equal(triggers.schedule, undefined, `${workflowName} must not run on a timer`);
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(triggers, 'workflow_dispatch'),
+      `${workflowName} should remain manually dispatchable`,
+    );
+  }
 });
 
 test('extended DB matrix runs the bounded fast E2E lane for each external database', () => {
